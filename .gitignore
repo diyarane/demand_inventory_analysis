@@ -1,0 +1,16 @@
+venv/
+.venv/
+env/
+data/
+*.csv
+*.xlsx
+*.pkl
+*.model
+__pycache__/data/
+*.csv
+*.xlsx
+*.pkl
+*.model
+__pycache__/
+.venv/
+env/

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/employee.css') }}">
+
+<h2 class="dashboard-title">Employee Dashboard</h2>
+
+<section class="kpi-section">
+  <div class="kpi-card">
+    <div class="kpi-label">Total Employees</div>
+    <div class="kpi-value" id="empCount">-</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Total Sales</div>
+    <div class="kpi-value" id="empTotalSales">-</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Avg Sales / Employee</div>
+    <div class="kpi-value" id="empAvgSales">-</div>
+  </div>
+</section>
+
+<section>
+  <h3 class="section-title">Ranking Table</h3>
+  <div id="empInsight" class="insight-text"></div>
+
+  <div class="table-container">
+    <table class="custom-table">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Employee</th>
+          <th>Total Sales</th>
+          <th>Avg Transaction</th>
+          <th>Orders</th>
+          <th>Contribution</th>
+        </tr>
+      </thead>
+      <tbody id="empTableBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="chart-section">
+  <div class="chart-box">
+    <h4>Top 10 Employees (Sales)</h4>
+    <canvas id="empChart"></canvas>
+  </div>
+
+  <div class="chart-box">
+    <h4>Top 5 Contribution</h4>
+    <canvas id="empPieChart"></canvas>
+  </div>
+</section>
+
+<section>
+  <a class="export-btn" href="/export/employees">Export Employee Data</a>
+</section>
+
+<script>
+window.addEventListener('load', () => {
+
+  const empDataRaw = JSON.parse('{{ employee_data | tojson | safe }}');
+
+  const empData = (empDataRaw || []).map(e => ({
+    ...e,
+    employee: e.employee || e.Employee || "Unknown"
+  }));
+
+  const tbody = document.getElementById('empTableBody');
+
+  const formatMoney = (x) => Number(x).toLocaleString('en-IN');
+  const formatInt = (x) => Number(x).toLocaleString('en-IN');
+
+  if (!empData.length) {
+    tbody.innerHTML = '<tr><td colspan="6">No data available</td></tr>';
+    return;
+  }
+
+  const sorted = empData.sort((a,b) => b.total_sales - a.total_sales);
+
+  const totalSales = sorted.reduce((s,r) => s + r.total_sales, 0);
+
+  document.getElementById('empCount').innerText = sorted.length;
+  document.getElementById('empTotalSales').innerText = "₹ " + formatMoney(totalSales);
+  document.getElementById('empAvgSales').innerText = "₹ " + formatMoney(totalSales / sorted.length);
+
+  const topEmployee = sorted[0];
+  document.getElementById('empInsight').innerText =
+    `${topEmployee.employee} leads with ₹${formatMoney(topEmployee.total_sales)} (${topEmployee.contribution_pct}%)`;
+
+  sorted.forEach((row, i) => {
+    const tr = document.createElement('tr');
+
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td>${row.employee}</td>
+      <td>${formatMoney(row.total_sales)}</td>
+      <td>${formatMoney(row.avg_transaction)}</td>
+      <td>${formatInt(row.total_orders)}</td>
+      <td>${row.contribution_pct}%</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  const top10 = sorted.slice(0,10);
+
+  new Chart(document.getElementById('empChart'), {
+    type: 'bar',
+    data: {
+      labels: top10.map(d => d.employee),
+      datasets: [{
+        label: 'Sales',
+        data: top10.map(d => d.total_sales),
+        backgroundColor: '#3b82f6'
+      }]
+    },
+    options: darkChartOptions()
+  });
+
+  const top5 = sorted.slice(0,5);
+
+  new Chart(document.getElementById('empPieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: top5.map(d => d.employee),
+      datasets: [{
+        data: top5.map(d => d.contribution_pct),
+        backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444']
+      }]
+    },
+    options: {
+      plugins: { legend: { labels: { color: '#e6edf3' } } }
+    }
+  });
+
+});
+
+function darkChartOptions() {
+  return {
+    plugins: {
+      legend: { labels: { color: '#e6edf3' } }
+    },
+    scales: {
+      x: { ticks: { color: '#93c5fd' } },
+      y: { ticks: { color: '#93c5fd' } }
+    }
+  };
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#111827;
+      --card2:#0f172a;
+      --border:#243041;
+      --text:#e6edf3;
+      --muted:#93c5fd;
+      --blue:#3b82f6;
+      --green:#34d399;
+      --amber:#f59e0b;
+    }
+    body{background:var(--bg);color:var(--text);}
+    h2,h3,h4,h5,h6{color:#fff;font-weight:700;letter-spacing:.2px;}
+    .text-muted{color:var(--muted)!important;}
+    .card{background:var(--card);border-color:var(--border);border-radius:14px;}
+    .card .card-body{padding:18px 18px;}
+    .list-group-item{background:var(--card2);color:var(--text);border-color:var(--border);}
+    .table{color:var(--text);border-color:var(--border);overflow:hidden;border-radius:14px;}
+    .table thead th{color:#fff;border-color:var(--border);}
+    .table-striped>tbody>tr:nth-of-type(odd)>*{color:var(--text);background-color:rgba(255,255,255,.03);}
+    .table-hover>tbody>tr:hover>*{background-color:rgba(59,130,246,.08);color:var(--text);}
+    .kpi-value{font-size:1.35rem;font-weight:800;color:#fff;}
+    .kpi-sub{font-size:.85rem;color:var(--muted);}
+    .section-note{color:var(--muted);font-size:.92rem;}
+  </style>
+
+  <h2 class="mb-4">Manager Dashboard</h2>
+
+  <section class="mb-4">
+    <div class="row g-3" id="kpiCards">
+      <div class="col-md-3"><div class="card"><div class="card-body"><div class="kpi-sub">Total Revenue</div><div class="kpi-value" id="kpiRevenue">-</div></div></div></div>
+      <div class="col-md-3"><div class="card"><div class="card-body"><div class="kpi-sub">Total Orders</div><div class="kpi-value" id="kpiOrders">-</div></div></div></div>
+      <div class="col-md-3"><div class="card"><div class="card-body"><div class="kpi-sub">Avg Order Value</div><div class="kpi-value" id="kpiAov">-</div></div></div></div>
+      <div class="col-md-3"><div class="card"><div class="card-body"><div class="kpi-sub">Profit Margin</div><div class="kpi-value" id="kpiMargin">-</div></div></div></div>
+    </div>
+  </section>
+
+  <section class="mb-4">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <h4 class="mb-0">Demand Forecasting</h4>
+          <div class="small" id="trendIndicator"></div>
+        </div>
+        <div class="section-note mt-2" id="trendInsight"></div>
+        <div class="small text-muted mt-1" id="trendNote"></div>
+        <canvas id="trendChart" height="120"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-4">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="mb-0">Sales Forecasting</h4>
+        <div class="section-note mt-2" id="salesInsight"></div>
+        <div class="small text-muted mb-2">Predicted Sales (₹)</div>
+        <canvas id="salesChart" height="120"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-4">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="mb-0">Profit Forecasting</h4>
+        <div class="section-note mt-2" id="profitInsight"></div>
+        <div class="small text-muted mb-2">Predicted Profit (₹)</div>
+        <canvas id="profitChart" height="120"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-4">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="mb-0">Model Drivers (Explainable AI)</h4>
+        <div class="section-note mt-2">Top inputs the demand model relied on most (feature importance).</div>
+        <ul class="list-group" id="factorList"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-4">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="mb-0">Inventory Optimization</h4>
+        <div class="section-note mt-2">Status is derived from how many days the current stock will last at the predicted daily demand.</div>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Current Stock</th>
+                <th>Status</th>
+                <th>Avg units per transaction</th>
+                <th>Est. daily demand</th>
+                <th>Days of supply</th>
+                <th>Reason</th>
+                <th>Recommendation</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-4">
+    <div class="accordion" id="predictAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePredict">
+            Manual Prediction
+          </button>
+        </h2>
+        <div id="collapsePredict" class="accordion-collapse collapse" data-bs-parent="#predictAccordion">
+          <div class="accordion-body">
+            <div class="row g-3">
+              {% for f in feature_importances[:6] %}
+                <div class="col-md-4">
+                  <label class="form-label" for="feat_{{ loop.index0 }}">{{ f.name }}</label>
+                  <input type="number" step="any" class="form-control" id="feat_{{ loop.index0 }}" value="0" />
+                </div>
+              {% endfor %}
+            </div>
+            <div class="d-flex gap-2 mt-3">
+              <button type="button" class="btn btn-primary" id="btnDemand">Predict Demand</button>
+              <button type="button" class="btn btn-secondary" id="btnSales">Predict Sales</button>
+              <button type="button" class="btn btn-success" id="btnProfit">Predict Profit</button>
+            </div>
+            <div class="mt-3" id="result"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-4">
+    <div class="card">
+      <div class="card-body d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary" href="/export/forecast">Export Forecast</a>
+        <a class="btn btn-outline-secondary" href="/export/combined">Export Combined</a>
+        <a class="btn btn-outline-success" href="/export/inventory">Export Inventory</a>
+        <a class="btn btn-outline-dark" href="/export/employees">Export Employees</a>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    window.addEventListener('load', async () => {
+      const fiData = {{ feature_importances | tojson }};
+      const topFeatures = fiData.slice(0, 6).map(d => d.name);
+
+      const money = (n) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+      const prettyName = (s) => {
+        const map = {
+          'rolling_7d_avg_sales': '7-Day Avg Sales',
+          'effective_price': 'Effective Price',
+          'unit_price': 'Unit Price',
+          'stock_available': 'Stock Available',
+          'lag_7_day_sales': 'Sales (Last Week)'
+        };
+        if (!s) return '';
+        const key = String(s);
+        if (map[key]) return map[key];
+        return key.replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+      };
+      const analyzeSeries = (vals) => {
+        const v = (vals || []).map(Number).filter(x => Number.isFinite(x));
+        if (v.length < 2) return { trend: 'stable', min: 0, max: 0 };
+        const min = Math.min(...v);
+        const max = Math.max(...v);
+        const first = v[0];
+        const last = v[v.length - 1];
+        const rel = first !== 0 ? (last - first) / Math.abs(first) : 0;
+        const trend = rel > 0.06 ? 'up' : rel < -0.06 ? 'down' : 'stable';
+        return { trend, min, max };
+      };
+      const weeklyPatternScore = (vals) => {
+        const v = (vals || []).map(Number).filter(x => Number.isFinite(x));
+        if (v.length < 14) return 0;
+        let diffs = 0;
+        for (let i = 0; i < v.length - 7; i++) diffs += Math.abs(v[i] - v[i + 7]) / Math.max(1, Math.abs(v[i]));
+        return diffs / (v.length - 7);
+      };
+
+      const fillKpi = async () => {
+        const res = await fetch('/api/kpi_summary');
+        const data = await res.json();
+        if (!res.ok) return;
+        document.getElementById('kpiRevenue').innerText = '₹ ' + money(data.total_revenue);
+        document.getElementById('kpiOrders').innerText = Number(data.total_orders || 0).toLocaleString('en-IN');
+        document.getElementById('kpiAov').innerText = '₹ ' + money(data.avg_order_value);
+        document.getElementById('kpiMargin').innerText = money(data.profit_margin_pct) + '%';
+        const factorList = document.getElementById('factorList');
+        factorList.innerHTML = '';
+        (data.top_factors || []).forEach(f => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between';
+          li.innerHTML = `<span>${prettyName(f.name)}</span><span>${f.score}</span>`;
+          factorList.appendChild(li);
+        });
+      };
+
+      const fillTrend = async () => {
+        const res = await fetch('/api/demand_trend?forecast_days=30');
+        const data = await res.json();
+        if (!res.ok) return;
+        const h = data.historical || [];
+        const f = data.forecast || [];
+        const labels = [...h.map(x => x.date), ...f.map(x => x.date)];
+        const actual = [...h.map(x => x.quantity), ...new Array(f.length).fill(null)];
+        const forecast = [...new Array(h.length).fill(null), ...f.map(x => x.quantity)];
+        const dir = data.trend_direction || 'stable';
+        const arrow = dir === 'up' ? '↑ increasing' : dir === 'down' ? '↓ decreasing' : '→ stable';
+        const tpd = data.transactions_per_day ? ` • ${data.transactions_per_day} txns/day` : '';
+        document.getElementById('trendIndicator').innerText = `${arrow} • units/day${tpd}`;
+        document.getElementById('trendNote').innerText = data.method_note || 'Forecast is based on historical trends using lag features and rolling averages';
+        const fcstVals = f.map(x => x.quantity);
+        const stats = analyzeSeries(fcstVals);
+        const weeklyScore = weeklyPatternScore(fcstVals);
+        let insight = '';
+        if (weeklyScore > 0 && weeklyScore < 0.22) insight = 'Demand shows a cyclical weekly pattern in the forecast.';
+        else if (stats.trend === 'up') insight = 'Slight upward trend observed in demand over the next 14 days.';
+        else if (stats.trend === 'down') insight = 'Demand is expected to soften slightly over the next 14 days.';
+        else insight = 'Demand is expected to remain broadly stable over the next 14 days.';
+        document.getElementById('trendInsight').innerText = insight;
+        new Chart(document.getElementById('trendChart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Past (Actual units/day)', data: actual, borderColor: '#3b82f6', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+              { label: 'Future (Predicted units/day)', data: forecast, borderColor: '#34d399', borderDash: [6, 4], tension: 0.3, pointRadius: 0, borderWidth: 2 }
+            ]
+          },
+          options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { labels: { color: '#e6edf3' } },
+              tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString('en-IN', { maximumFractionDigits: 1 })}` } }
+            },
+            scales: {
+              x: { ticks: { color: '#93c5fd' }, grid: { color: 'rgba(147,197,253,.08)' } },
+              y: { ticks: { color: '#93c5fd' }, grid: { color: 'rgba(147,197,253,.08)' } }
+            }
+          }
+        });
+
+        const sf = data.sales_forecast || [];
+        if (sf.length) {
+          const vals = sf.map(x => x.revenue);
+          const st = analyzeSeries(vals);
+          document.getElementById('salesInsight').innerText =
+            `Sales are expected to fluctuate between ₹${money(st.min)}–₹${money(st.max)} ` +
+            (st.trend === 'up' ? 'with a mild upward trend.' : st.trend === 'down' ? 'with a mild downward trend.' : 'with no strong upward trend.');
+          new Chart(document.getElementById('salesChart'), {
+            type: 'line',
+            data: {
+              labels: sf.map(x => x.date),
+              datasets: [{ label: 'Predicted Sales (₹)', data: vals, borderColor: '#f59e0b', tension: 0.3, pointRadius: 0, borderWidth: 2 }]
+            },
+            options: {
+              responsive: true,
+              interaction: { mode: 'index', intersect: false },
+              plugins: { legend: { labels: { color: '#e6edf3' } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ₹${money(ctx.parsed.y)}` } } },
+              scales: { x: { ticks: { color: '#93c5fd' }, grid: { color: 'rgba(147,197,253,.08)' } }, y: { ticks: { color: '#93c5fd' }, grid: { color: 'rgba(147,197,253,.08)' } } }
+            }
+          });
+        }
+
+        const pf = data.profit_forecast || [];
+        if (pf.length) {
+          const vals = pf.map(x => x.profit);
+          const st = analyzeSeries(vals);
+          document.getElementById('profitInsight').innerText =
+            st.trend === 'stable'
+              ? 'Profit remains stable, indicating consistent margins.'
+              : st.trend === 'up'
+                ? 'Profit shows a gradual improvement, suggesting better margins or higher volume.'
+                : 'Profit shows mild pressure, suggesting margin compression or lower volume.';
+          new Chart(document.getElementById('profitChart'), {
+            type: 'line',
+            data: {
+              labels: pf.map(x => x.date),
+              datasets: [{ label: 'Predicted Profit (₹)', data: vals, borderColor: '#34d399', tension: 0.3, pointRadius: 0, borderWidth: 2 }]
+            },
+            options: {
+              responsive: true,
+              interaction: { mode: 'index', intersect: false },
+              plugins: { legend: { labels: { color: '#e6edf3' } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ₹${money(ctx.parsed.y)}` } } },
+              scales: { x: { ticks: { color: '#93c5fd' }, grid: { color: 'rgba(147,197,253,.08)' } }, y: { ticks: { color: '#93c5fd' }, grid: { color: 'rgba(147,197,253,.08)' } } }
+            }
+          });
+        }
+      };
+
+      const fillInventory = async () => {
+        const res = await fetch('/api/inventory_intelligence');
+        const data = await res.json();
+        const body = document.getElementById('inventoryBody');
+        body.innerHTML = '';
+        if (!res.ok) return;
+        data.forEach(r => {
+          const daily = Number(r.daily_predicted_demand || 0);
+          const stock = Number(r.current_stock || 0);
+          const days = daily > 0 ? (stock / daily) : 999;
+          let status = 'Optimal';
+          let reason = 'Stock levels are balanced with predicted demand.';
+          let rec = 'Maintain current inventory levels.';
+          if (days < 7) {
+            status = 'Understock';
+            reason = `Stock will last only ${days.toFixed(1)} days based on predicted demand of ${daily.toFixed(1)} units/day.`;
+            rec = 'Reorder immediately to avoid stockout.';
+          } else if (days > 15) {
+            status = 'Overstock';
+            reason = `Stock exceeds expected demand for ${days.toFixed(1)} days.`;
+            rec = 'Reduce reordering or run promotions.';
+          }
+          const statusClass =
+            status === 'Overstock' ? 'text-warning fw-semibold' :
+            status === 'Understock' ? 'text-danger fw-semibold' :
+            'text-success fw-semibold';
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.product || ''}</td>
+            <td>${money(r.current_stock)}</td>
+            <td class="${statusClass}">${status}</td>
+            <td>${money(r.avg_units_per_transaction)}</td>
+            <td>${money(daily)} units/day</td>
+            <td>${days === 999 ? '—' : days.toFixed(1)}</td>
+            <td>${reason}</td>
+            <td>${rec}</td>
+          `;
+          body.appendChild(tr);
+        });
+      };
+
+      const payloadFromInputs = () => {
+        const payload = {};
+        topFeatures.forEach((name, i) => {
+          const el = document.getElementById('feat_' + i);
+          payload[name] = el ? Number(el.value || 0) : 0;
+        });
+        return payload;
+      };
+
+      const postPredict = async (endpoint) => {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadFromInputs())
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById('result').innerText = data.error || 'Error';
+          return;
+        }
+        document.getElementById('result').innerText = 'Predicted: ' + money(data.prediction);
+      };
+
+      document.getElementById('btnDemand').addEventListener('click', () => postPredict('/api/predict/demand'));
+      document.getElementById('btnSales').addEventListener('click', () => postPredict('/api/predict/sales'));
+      document.getElementById('btnProfit').addEventListener('click', () => postPredict('/api/predict/profit'));
+
+      await fillKpi();
+      await fillTrend();
+      await fillInventory();
+    });
+  </script>
+{% endblock %}
+
