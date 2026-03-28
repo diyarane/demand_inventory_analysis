@@ -1,0 +1,27 @@
+body {
+  background: linear-gradient(135deg,#020617,#0f172a,#020617);
+  color: #fff;
+}
+
+.card {
+  background: linear-gradient(145deg,#0f172a,#020617);
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 0 40px rgba(56,189,248,0.2);
+}
+
+h2 {
+  color: #38bdf8;
+}
+
+.kpi {
+  font-size: 32px;
+  font-weight: bold;
+  color: #22c55e;
+}
+
+canvas {
+  background: rgba(0,0,0,0.4);
+  border-radius: 15px;
+}
